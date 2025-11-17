@@ -1,21 +1,34 @@
-# Use an official Node.js image as the base
-FROM node:20-alpine
-
-# Set working directory inside the container
+# Step 1 — Build the static files using Parcel
+FROM node:18-alpine AS builder
 WORKDIR /app
 
+# Copy and install dependencies
+COPY package.json package-lock.json ./
+RUN npm install
 
-# Copy the rest of the project files
+# Copy all project files
 COPY . .
 
-# Install parcel globally inside container
-RUN npm install -g parcel
+# Build using Parcel → output goes to /app/dist
+RUN npm run build
 
-#Build the static site
-Run parcel build src/index.html --dit-dir --public-url ./
 
-# Expose port (optional, for development)
+# Step 2 — Run server.js using Express to serve dist/
+FROM node:18-alpine
+WORKDIR /app
+
+# Copy built dist folder from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Copy server.js to final container
+COPY server.js ./
+
+# Copy package files again to install only production dependencies
+COPY package.json package-lock.json ./
+RUN npm install --only=production
+
+# Expose port
 EXPOSE 1234
 
-# Command to run when container starts
-CMD ["npx", "parcel", "serve", "src/index.html", "--port", "1234"]
+# Start server
+CMD ["node", "server.js"]
